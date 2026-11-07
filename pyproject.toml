@@ -1,0 +1,17 @@
+[project]
+name = "doordash-eval-harness"
+version = "0.1.0"
+description = "A mini eval harness for tool-calling agents, built from the patterns in DoorDash's Ask DoorDash post."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["anthropic>=2.6,<3"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

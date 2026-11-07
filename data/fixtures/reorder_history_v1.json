@@ -1,0 +1,27 @@
+{
+  "get_reorder_items": {
+    "_meta": {"schema_version": "2.3", "source": "orders-service", "pagination": {"cursor": null, "has_more": false}},
+    "success": true,
+    "orders": [
+      {
+        "store_name": "Fixture Fresh Market",
+        "order_date": "2026-04-22T18:30:00Z",
+        "items": [
+          {"id": "milk-whole", "name": "Whole Milk (1 gal)", "quantity": 2},
+          {"id": "bread-wheat", "name": "100% Whole Wheat Bread (24 oz)", "quantity": 1},
+          {"id": "avocado", "name": "Hass Avocado", "quantity": 5},
+          {"id": "ice-cream", "name": "Vanilla Ice Cream (1 pt)", "quantity": 1}
+        ]
+      },
+      {
+        "store_name": "Fixture Fresh Market",
+        "order_date": "2026-04-08T17:05:00Z",
+        "items": [
+          {"id": "milk-whole", "name": "Whole Milk (1 gal)", "quantity": 1},
+          {"id": "eggs", "name": "Large Eggs (12 ct)", "quantity": 1},
+          {"id": "bananas", "name": "Bananas (1 bunch)", "quantity": 1}
+        ]
+      }
+    ]
+  }
+}

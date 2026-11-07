@@ -1,0 +1,34 @@
+{
+  "search_catalog": {
+    "_meta": {"schema_version": "4.1", "source": "catalog-service", "index": "grocery-us-west", "experiment_flags": []},
+    "items": [
+      {"id": "milk-whole", "name": "Whole Milk (1 gal)", "price": 4.99, "in_stock": true, "tags": ["dairy", "milk"], "allergens": ["milk"]},
+      {"id": "milk-oat", "name": "Oat Milk (64 oz)", "price": 5.49, "in_stock": false, "tags": ["non-dairy", "milk", "vegan"], "allergens": []},
+      {"id": "milk-soy", "name": "Soy Milk (64 oz)", "price": 4.29, "in_stock": true, "tags": ["non-dairy", "milk", "vegan"], "allergens": ["soy"]},
+      {"id": "milk-almond", "name": "Almond Milk (64 oz)", "price": 4.49, "in_stock": true, "tags": ["non-dairy", "milk", "vegan"], "allergens": ["tree nuts"]},
+      {"id": "bread-wheat", "name": "100% Whole Wheat Bread (24 oz)", "price": 4.79, "in_stock": true, "tags": ["bread", "bakery"], "allergens": ["wheat"]},
+      {"id": "avocado", "name": "Hass Avocado", "price": 1.49, "in_stock": true, "tags": ["produce", "fruit", "guacamole", "taco"], "allergens": []},
+      {"id": "ice-cream", "name": "Vanilla Ice Cream (1 pt)", "price": 5.99, "in_stock": true, "tags": ["frozen", "dessert"], "allergens": ["milk", "eggs"]},
+      {"id": "eggs", "name": "Large Eggs (12 ct)", "price": 3.99, "in_stock": true, "tags": ["dairy", "breakfast"], "allergens": ["eggs"]},
+      {"id": "bananas", "name": "Bananas (1 bunch)", "price": 1.79, "in_stock": true, "tags": ["produce", "fruit", "snack"], "allergens": []},
+      {"id": "tortilla-corn", "name": "Corn Tortillas (30 ct)", "price": 3.49, "in_stock": true, "tags": ["taco", "tortilla", "mexican"], "allergens": []},
+      {"id": "tortilla-flour", "name": "Flour Tortillas (10 ct)", "price": 3.29, "in_stock": true, "tags": ["taco", "tortilla", "mexican"], "allergens": ["wheat"]},
+      {"id": "taco-shells", "name": "Crunchy Taco Shells (12 ct)", "price": 2.99, "in_stock": true, "tags": ["taco", "shells", "mexican"], "allergens": []},
+      {"id": "black-beans", "name": "Black Beans (15 oz)", "price": 1.19, "in_stock": true, "tags": ["canned", "beans", "taco", "vegan"], "allergens": []},
+      {"id": "pinto-beans", "name": "Refried Pinto Beans (16 oz)", "price": 1.59, "in_stock": true, "tags": ["canned", "beans", "taco"], "allergens": []},
+      {"id": "cheese-cheddar", "name": "Shredded Cheddar (8 oz)", "price": 3.79, "in_stock": true, "tags": ["dairy", "cheese", "taco"], "allergens": ["milk"]},
+      {"id": "salsa", "name": "Medium Salsa (16 oz)", "price": 3.49, "in_stock": true, "tags": ["salsa", "taco", "snack", "mexican"], "allergens": []},
+      {"id": "lettuce", "name": "Shredded Lettuce (8 oz)", "price": 2.49, "in_stock": true, "tags": ["produce", "taco", "salad"], "allergens": []},
+      {"id": "tomatoes", "name": "Roma Tomatoes (1 lb)", "price": 1.99, "in_stock": true, "tags": ["produce", "taco", "salad"], "allergens": []},
+      {"id": "onion", "name": "Red Onion", "price": 0.99, "in_stock": true, "tags": ["produce", "taco"], "allergens": []},
+      {"id": "lime", "name": "Lime", "price": 0.59, "in_stock": true, "tags": ["produce", "fruit", "taco"], "allergens": []},
+      {"id": "ground-beef", "name": "Ground Beef 85% (1 lb)", "price": 6.99, "in_stock": true, "tags": ["meat", "beef", "taco"], "allergens": []},
+      {"id": "chicken-thigh", "name": "Chicken Thighs (1.5 lb)", "price": 7.49, "in_stock": true, "tags": ["meat", "chicken", "taco"], "allergens": []},
+      {"id": "pretzels", "name": "Mini Pretzels (16 oz)", "price": 3.29, "in_stock": true, "tags": ["snack", "party"], "allergens": ["wheat"]},
+      {"id": "popcorn", "name": "Sea Salt Popcorn (6 oz)", "price": 2.99, "in_stock": true, "tags": ["snack", "party"], "allergens": []},
+      {"id": "fruit-snacks", "name": "Fruit Snack Pouches (10 ct)", "price": 4.49, "in_stock": true, "tags": ["snack", "party", "kids"], "allergens": []},
+      {"id": "trail-mix", "name": "Classic Trail Mix (10 oz)", "price": 5.99, "in_stock": true, "tags": ["snack", "party"], "allergens": ["peanuts", "tree nuts"]},
+      {"id": "granola-bars", "name": "Chewy Granola Bars (8 ct)", "price": 3.99, "in_stock": true, "tags": ["snack", "kids", "party"], "allergens": ["peanuts", "tree nuts", "wheat"]}
+    ]
+  }
+}

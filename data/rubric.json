@@ -1,0 +1,20 @@
+[
+  {
+    "id": "grounding",
+    "applies_when": "The agent states a product name, price or availability.",
+    "criterion": "Every product name, price and availability claim in the agent's messages matches the tool results.",
+    "evidence": ["assistant", "tool_result"]
+  },
+  {
+    "id": "narration",
+    "applies_when": "The agent sent at least one message.",
+    "criterion": "The agent's messages read like a store employee. They do not mention tools, function names, schemas, or internal process words such as fetch, query or in parallel.",
+    "evidence": ["assistant"]
+  },
+  {
+    "id": "shopping_execution",
+    "applies_when": "The user explicitly asked to add, remove or change an item, and that item was available.",
+    "criterion": "Every explicit cart request from the user is reflected in the final cart.",
+    "evidence": ["user", "tool_call", "final_cart"]
+  }
+]

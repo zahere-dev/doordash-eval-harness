@@ -1,0 +1,104 @@
+[
+  {
+    "evalId": "mt-reorder",
+    "fixtures": ["catalog_v1", "reorder_history_v1"],
+    "max_turns": 3,
+    "startingPrompt": "Reorder my usuals",
+    "conversationPlan": "You want to reorder your usual groceries. Accept the agent's suggestions and ask it to put them in the cart.",
+    "checklist": [
+      {
+        "id": "reorder_from_history",
+        "applies_when": "The final cart has at least one item.",
+        "criterion": "Every item in the final cart appears in the recorded order history.",
+        "evidence": ["tool_result", "final_cart"]
+      }
+    ]
+  },
+  {
+    "evalId": "mt-taco-budget",
+    "fixtures": ["catalog_v1"],
+    "max_turns": 3,
+    "startingPrompt": "Build me a vegetarian taco grocery list for two, under $60",
+    "conversationPlan": "You want vegetarian taco ingredients for two people under $60. Approve a sensible list and ask for it to be added to the cart.",
+    "checklist": [
+      {
+        "id": "taco_items_relevant",
+        "applies_when": "The final cart has at least one item.",
+        "criterion": "Every cart item is a sensible ingredient for vegetarian tacos and none contains meat.",
+        "evidence": ["final_cart"]
+      },
+      {
+        "id": "taco_under_budget",
+        "applies_when": "The final cart has at least one item.",
+        "criterion": "The final cart subtotal is at or below $60.",
+        "evidence": ["final_cart"]
+      }
+    ]
+  },
+  {
+    "evalId": "mt-out-of-stock",
+    "fixtures": ["catalog_v1"],
+    "max_turns": 3,
+    "startingPrompt": "Add oat milk to my cart",
+    "conversationPlan": "You want oat milk. If it is unavailable, accept one reasonable non-dairy substitute.",
+    "checklist": [
+      {
+        "id": "no_false_add",
+        "applies_when": "Always.",
+        "criterion": "The agent does not claim that oat milk is in the cart, and tells the user it is out of stock.",
+        "evidence": ["assistant", "final_cart"]
+      }
+    ]
+  },
+  {
+    "evalId": "mt-allergen",
+    "fixtures": ["catalog_v1"],
+    "max_turns": 3,
+    "startingPrompt": "I need snacks for a school party. No nuts, it's for a kid with an allergy. Budget is $15.",
+    "conversationPlan": "You want nut-free snacks under $15 total. Approve the suggestions and ask for them to be added to the cart.",
+    "checklist": [
+      {
+        "id": "allergen_safe",
+        "applies_when": "The final cart has at least one item.",
+        "criterion": "No cart item lists tree nuts or peanuts in its allergens in the tool results.",
+        "evidence": ["tool_result", "final_cart"]
+      },
+      {
+        "id": "allergen_budget",
+        "applies_when": "The final cart has at least one item.",
+        "criterion": "The final cart subtotal is at or below $15.",
+        "evidence": ["final_cart"]
+      }
+    ]
+  },
+  {
+    "evalId": "mt-change-order",
+    "fixtures": ["catalog_v1"],
+    "max_turns": 4,
+    "startingPrompt": "Add 2 avocados and a loaf of whole wheat bread",
+    "conversationPlan": "After the agent confirms, change your mind: you want 3 avocados, and remove the bread.",
+    "checklist": [
+      {
+        "id": "change_applied",
+        "applies_when": "Always.",
+        "criterion": "The final cart has exactly 3 avocados and no bread.",
+        "evidence": ["final_cart"]
+      }
+    ]
+  },
+  {
+    "evalId": "mt-not-sold",
+    "fixtures": ["catalog_v1"],
+    "max_turns": 2,
+    "startingPrompt": "Do you carry gluten-free taco shells?",
+    "conversationPlan": "You only want to know if gluten-free taco shells are sold. Do not ask for anything else.",
+    "checklist": [
+      {
+        "id": "no_invented_product",
+        "applies_when": "Always.",
+        "criterion": "The agent says gluten-free taco shells were not found, and does not present any catalog item as gluten-free unless the tool results say so.",
+        "evidence": ["assistant", "tool_result"]
+      }
+    ]
+  }
+]
