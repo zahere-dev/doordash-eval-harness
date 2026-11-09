@@ -1,12 +1,12 @@
 """Mini eval harness: rubric -> transcript builder -> conversation simulator -> LLM-as-a-judge."""
 import json, pathlib
 from concurrent.futures import ThreadPoolExecutor
-import anthropic
+import openai
 from agent import DATA, USAGE, Agent, HarnessError, ask, text
 
 PROPS = {"rationale": {"type": "string"}, "eligible": {"type": "boolean"}, "passed": {"type": "boolean"}}
-VERDICT = {"format": {"type": "json_schema", "schema": {"type": "object", "properties": PROPS,
-           "required": list(PROPS), "additionalProperties": False}}}
+VERDICT = {"type": "json_schema", "json_schema": {"name": "verdict", "strict": True, "schema": {
+           "type": "object", "properties": PROPS, "required": list(PROPS), "additionalProperties": False}}}
 SHOPPER = "You are a simulated user. Your plan: {}\nWrite only your next short message. When the plan is finished, write DONE."
 JUDGE = "You are an LLM judge. Grade only from the evidence.\nEligible when: {applies_when}\nCriterion: {criterion}\nIf not eligible, set passed to false."
 
@@ -28,14 +28,14 @@ def simulate(client, scenario, args):  # simulated user drives the agent against
 
 def judge(client, model, c, trace):  # one independent verdict per criterion
     chat = [{"role": "user", "content": view(trace, c["evidence"])}]
-    return {"criterion": c["id"], **json.loads(text(ask(client, model, JUDGE.format(**c), chat, output_config=VERDICT)))}
+    return {"criterion": c["id"], **json.loads(text(ask(client, model, JUDGE.format(**c), chat, response_format=VERDICT)))}
 
 def trial(client, args, rubric, scenario, n):
     row = {"scenario": scenario["evalId"], "trial": n, "model": args.model}
     try:
         row["trace"] = simulate(client, scenario, args)
         row["verdicts"] = [judge(client, args.judge, c, row["trace"]) for c in rubric + scenario.get("checklist", [])]
-    except (anthropic.APIError, HarnessError, ValueError) as e:
+    except (openai.OpenAIError, HarnessError, ValueError) as e:
         row["harness_error"] = repr(e)  # an infrastructure failure is not an agent failure
     return row
 

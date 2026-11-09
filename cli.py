@@ -1,11 +1,28 @@
 """Command line entry point for the 50-line core in harness.py."""
 import argparse
+import os
+from pathlib import Path
 
-import anthropic
+import openai
 
 from harness import run
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "gpt-5-mini"
+
+
+def load_env(path=Path(__file__).parent / ".env"):
+    """Load KEY=VALUE lines from .env into os.environ; real environment variables win."""
+    if not path.is_file():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.removeprefix("export ").strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 def parse(argv=None):
@@ -22,4 +39,5 @@ def parse(argv=None):
 
 
 if __name__ == "__main__":
-    run(anthropic.Anthropic(), parse())
+    load_env()
+    run(openai.OpenAI(), parse())

@@ -6,7 +6,7 @@ A mini eval harness for tool-calling agents, built from the patterns in DoorDash
 
 This is an independent teaching project. It isn't DoorDash's code and isn't affiliated with DoorDash. Everything here is my reading of a public blog post, scaled down.
 
-**Status:** the plumbing is tested, but this repo contains no eval results yet. The tests run the real Anthropic SDK against a mocked HTTP transport, so they prove the code works and say nothing about any model.
+**Status:** the plumbing is tested, but this repo contains no eval results yet. The tests run the real OpenAI SDK against a mocked HTTP transport, so they prove the code works and say nothing about any model.
 
 ## The four parts
 
@@ -25,8 +25,12 @@ Calibration is separate: `report.py export` and `report.py agreement` measure ju
 
 ```bash
 uv sync
-export ANTHROPIC_API_KEY=your-key
+echo 'OPENAI_API_KEY=your-key' >> .env
 ```
+
+`cli.py` loads `.env` from the project root on startup (`.env` is gitignored). Variables already set in your shell take precedence, so `export OPENAI_API_KEY=your-key` still works too.
+
+The harness uses the OpenAI Chat Completions API for the agent, the simulated user and the judge. Any chat model that supports tool calling and structured outputs works. The default is `gpt-5-mini`.
 
 ## Run it
 
@@ -34,13 +38,31 @@ Start with a one-trial smoke test:
 
 ```bash
 uv run cli.py --trials 1 --out runs/smoke.jsonl
+uv run report.py compare runs/smoke.jsonl runs/smoke.jsonl
 ```
 
-Compare two base models, 8 trials per scenario. Keep the judge and simulated user fixed, or you're measuring them instead of the agent:
+Check that the printed token counts are above 0 and `harness errors` is 0. If every session errored, the cause is usually the API key, billing or model access. Open `runs/smoke.jsonl` and read the `harness_error` field.
+
+Options:
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--model` | `gpt-5-mini` | Base model under test. |
+| `--judge` | `gpt-5-mini` | LLM judge. Keep it fixed across runs. |
+| `--user-model` | `gpt-5-mini` | Simulated user. Keep it fixed across runs. |
+| `--trials` | `8` | Trials per scenario. There are 6 scenarios. |
+| `--workers` | `4` | Sessions run in parallel. Lower it if you hit rate limits. |
+| `--prompt` | `system_prompt.txt` | System prompt file inside `data/`. |
+| `--guard` | off | Coerce malformed tool inputs instead of rejecting them. |
+| `--out` | `runs/run.jsonl` | Results file. |
+
+Each session makes several model calls: the agent turns, the simulated user, and one judge call per criterion. Use `--trials 1` or `--trials 3` while iterating.
+
+Compare two base models, 8 trials per scenario. Keep the judge and simulated user fixed, or you're measuring them instead of the agent. Here they stay at the default for both runs:
 
 ```bash
-uv run cli.py --model claude-opus-5-5 --out runs/model_a.jsonl
-uv run cli.py --model claude-haiku-5-5 --out runs/model_b.jsonl
+uv run cli.py --model gpt-5 --out runs/model_a.jsonl
+uv run cli.py --model gpt-5-mini --out runs/model_b.jsonl
 uv run report.py compare runs/model_a.jsonl runs/model_b.jsonl
 ```
 
@@ -56,7 +78,7 @@ uv run report.py show runs/model_b.jsonl mt-reorder 3
 Test a fix. Write a new system prompt into `data/` and load it with `--prompt`. `--guard` turns on the deterministic guard, which coerces malformed tool inputs instead of rejecting them:
 
 ```bash
-uv run cli.py --model claude-haiku-5-5 --prompt system_prompt_v2.txt --guard --out runs/model_b_fixed.jsonl
+uv run cli.py --model gpt-5-mini --prompt system_prompt_v2.txt --guard --out runs/model_b_fixed.jsonl
 ```
 
 ## Calibrate the judge

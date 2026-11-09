@@ -1,4 +1,4 @@
-"""Plumbing tests. These use the real Anthropic SDK over a mocked HTTP transport.
+"""Plumbing tests. These use the real OpenAI SDK over a mocked HTTP transport.
 
 They prove the harness builds valid requests, parses responses and scores
 correctly. They say nothing about how any real model performs.
@@ -7,7 +7,7 @@ import json
 import pathlib
 from types import SimpleNamespace
 
-import anthropic
+import openai
 import httpx2 as httpx
 import pytest
 
@@ -20,20 +20,33 @@ from cli import parse
 ROOT = pathlib.Path(__file__).parent.parent
 
 
-def message(content, stop_reason="end_turn"):
+def completion(msg, finish_reason="stop"):
     return {
-        "id": "msg_test", "type": "message", "role": "assistant", "model": "test-model",
-        "content": content, "stop_reason": stop_reason, "stop_sequence": None,
-        "usage": {"input_tokens": 10, "output_tokens": 5},
+        "id": "chatcmpl-test", "object": "chat.completion", "created": 0, "model": "test-model",
+        "choices": [{"index": 0, "message": {"role": "assistant", **msg}, "finish_reason": finish_reason}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }
 
 
-def say(words, stop_reason="end_turn"):
-    return message([{"type": "text", "text": words}], stop_reason)
+def call_of(name, tool_input, call_id):
+    arguments = tool_input if isinstance(tool_input, str) else json.dumps(tool_input)
+    return {"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments}}
 
 
-def tool(name, tool_input, call_id="toolu_1"):
-    return message([{"type": "tool_use", "id": call_id, "name": name, "input": tool_input}], "tool_use")
+def say(words, finish_reason="stop"):
+    return completion({"content": words}, finish_reason)
+
+
+def refuse():
+    return completion({"content": None, "refusal": "I can't help with that."})
+
+
+def calls(*tool_calls):
+    return completion({"content": None, "tool_calls": list(tool_calls)}, "tool_calls")
+
+
+def tool(name, tool_input, call_id="call_1"):
+    return calls(call_of(name, tool_input, call_id))
 
 
 def verdict(passed=True, eligible=True):
@@ -49,7 +62,7 @@ def client_for(responder):
         requests.append(body)
         return httpx.Response(200, json=responder(body))
 
-    client = anthropic.Anthropic(api_key="test", http_client=httpx.Client(transport=httpx.MockTransport(handle)), max_retries=0)
+    client = openai.OpenAI(api_key="test", http_client=httpx.Client(transport=httpx.MockTransport(handle)), max_retries=0)
     return client, requests
 
 
@@ -117,7 +130,7 @@ def test_malformed_call_without_guard_returns_tool_error_and_is_traced():
     call = next(s for s in a.trace if s["type"] == "tool_call")
     result = next(s for s in a.trace if s["type"] == "tool_result")
     assert call["schema_errors"] and result["is_error"]
-    assert requests[1]["messages"][-1]["content"][0]["is_error"] is True
+    assert json.loads(requests[1]["messages"][-1]["content"]) == {"error": "query should be string, got dict"}
 
 
 def test_malformed_call_with_guard_runs_but_keeps_the_original_args_in_the_trace():
@@ -137,20 +150,25 @@ def test_agent_replays_tool_use_and_matching_tool_result():
     a = Agent(client, "m", ["catalog_v1"])
     a.send("limes?")
     second = requests[1]
-    assert second["messages"][1]["content"][0]["id"] == "toolu_9"
-    assert second["messages"][2]["content"][0]["tool_use_id"] == "toolu_9"
-    assert second["system"].startswith("You are a grocery")
-    assert [t["name"] for t in second["tools"]] == ["get_reorder_items", "search_catalog", "set_cart_item"]
+    assert second["messages"][0]["role"] == "system" and second["messages"][0]["content"].startswith("You are a grocery")
+    assert second["messages"][2]["tool_calls"][0]["id"] == "toolu_9"
+    assert second["messages"][3]["role"] == "tool" and second["messages"][3]["tool_call_id"] == "toolu_9"
+    assert [t["function"]["name"] for t in second["tools"]] == ["get_reorder_items", "search_catalog", "set_cart_item"]
 
 
 def test_agent_runs_parallel_tool_calls_and_returns_results_in_one_message():
-    both = message([
-        {"type": "tool_use", "id": "a", "name": "search_catalog", "input": {"query": "lime"}},
-        {"type": "tool_use", "id": "b", "name": "search_catalog", "input": {"query": "salsa"}},
-    ], "tool_use")
+    both = calls(call_of("search_catalog", {"query": "lime"}, "a"), call_of("search_catalog", {"query": "salsa"}, "b"))
     client, requests = scripted(both, say("Done."))
     Agent(client, "m", ["catalog_v1"]).send("hi")
-    assert [b["tool_use_id"] for b in requests[1]["messages"][-1]["content"]] == ["a", "b"]
+    assert [m["tool_call_id"] for m in requests[1]["messages"][-2:]] == ["a", "b"]
+
+
+def test_non_json_tool_arguments_become_a_traced_tool_error():
+    client, _ = scripted(tool("search_catalog", "{not json"), say("Sorry."))
+    a = Agent(client, "m", ["catalog_v1"])
+    a.send("limes?")
+    call = next(s for s in a.trace if s["type"] == "tool_call")
+    assert call["schema_errors"] == ["arguments are not a JSON object"]
 
 
 def test_step_limit_is_recorded_as_a_span():
@@ -160,9 +178,9 @@ def test_step_limit_is_recorded_as_a_span():
     assert a.trace[-1]["type"] == "step_limit"
 
 
-@pytest.mark.parametrize("stop", ["refusal", "max_tokens"])
-def test_truncated_or_refused_response_is_a_harness_error(stop):
-    client, _ = scripted(say("", stop))
+@pytest.mark.parametrize("response", [refuse(), say("", "length"), say("", "content_filter")])
+def test_truncated_or_refused_response_is_a_harness_error(response):
+    client, _ = scripted(response)
     with pytest.raises(HarnessError):
         Agent(client, "m", ["catalog_v1"]).send("hi")
 
@@ -203,9 +221,9 @@ def test_judge_sends_structured_output_and_only_the_evidence_slice():
     result = harness.judge(client, "judge-model", c, TRACE)
     assert result == {"criterion": "narration", "rationale": "because", "eligible": True, "passed": False}
     body = requests[0]
-    assert body["output_config"]["format"]["type"] == "json_schema"
-    assert "tool_result" not in body["messages"][0]["content"]
-    assert "No tool names." in body["system"]
+    assert body["response_format"]["type"] == "json_schema"
+    assert "tool_result" not in body["messages"][1]["content"]
+    assert "No tool names." in body["messages"][0]["content"]
 
 
 # --- Full run ---
@@ -216,7 +234,7 @@ def args_for(tmp_path, **overrides):
 
 def fake_world(body):
     """Answers as agent, simulated user or judge depending on the request."""
-    if "output_config" in body:
+    if "response_format" in body:
         return verdict()
     if "tools" in body:
         return say("Happy to help.")
@@ -234,9 +252,9 @@ def test_full_run_writes_one_row_per_scenario_trial(tmp_path):
 
 def test_api_failure_becomes_a_harness_error_row_not_an_agent_failure(tmp_path):
     def handle(request):
-        return httpx.Response(500, json={"type": "error", "error": {"type": "api_error", "message": "boom"}})
+        return httpx.Response(500, json={"type": "error", "error": {"type": "server_error", "message": "boom"}})
 
-    client = anthropic.Anthropic(api_key="test", http_client=httpx.Client(transport=httpx.MockTransport(handle)), max_retries=0)
+    client = openai.OpenAI(api_key="test", http_client=httpx.Client(transport=httpx.MockTransport(handle)), max_retries=0)
     harness.run(client, args_for(tmp_path))
     summary = report.summarize(report.load(tmp_path / "r.jsonl"))
     assert summary["harness_errors"] == 6
@@ -245,7 +263,7 @@ def test_api_failure_becomes_a_harness_error_row_not_an_agent_failure(tmp_path):
 
 def test_invalid_judge_json_is_a_harness_error(tmp_path):
     def world(body):
-        return say("not json") if "output_config" in body else fake_world(body)
+        return say("not json") if "response_format" in body else fake_world(body)
 
     client, _ = client_for(world)
     harness.run(client, args_for(tmp_path))

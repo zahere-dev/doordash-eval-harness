@@ -13,31 +13,34 @@ USAGE = {"input": 0, "output": 0}
 _usage_lock = threading.Lock()
 
 TOOLS = [
-    {
-        "name": "get_reorder_items",
-        "description": "Get the shopper's past grocery orders.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "search_catalog",
-        "description": "Search the store catalog. Returns matching items with id, price, stock and allergens.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"query": {"type": "string", "description": "Plain text search query."}},
-            "required": ["query"],
+    {"type": "function", "function": f}
+    for f in [
+        {
+            "name": "get_reorder_items",
+            "description": "Get the shopper's past grocery orders.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
-    },
-    {
-        "name": "set_cart_item",
-        "description": "Set an item's quantity in the cart. Quantity 0 removes it. Returns the cart.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"item_id": {"type": "string"}, "quantity": {"type": "integer"}},
-            "required": ["item_id", "quantity"],
+        {
+            "name": "search_catalog",
+            "description": "Search the store catalog. Returns matching items with id, price, stock and allergens.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "Plain text search query."}},
+                "required": ["query"],
+            },
         },
-    },
+        {
+            "name": "set_cart_item",
+            "description": "Set an item's quantity in the cart. Quantity 0 removes it. Returns the cart.",
+            "parameters": {
+                "type": "object",
+                "properties": {"item_id": {"type": "string"}, "quantity": {"type": "integer"}},
+                "required": ["item_id", "quantity"],
+            },
+        },
+    ]
 ]
-SCHEMAS = {t["name"]: t["input_schema"] for t in TOOLS}
+SCHEMAS = {t["function"]["name"]: t["function"]["parameters"] for t in TOOLS}
 PY_TYPES = {"string": str, "integer": int}
 
 
@@ -46,17 +49,33 @@ class HarnessError(Exception):
 
 
 def ask(client, model, system, messages, **kwargs):
-    response = client.messages.create(model=model, max_tokens=16000, system=system, messages=messages, **kwargs)
+    """One Chat Completions call. Returns the assistant message."""
+    response = client.chat.completions.create(
+        model=model, max_completion_tokens=16000,
+        messages=[{"role": "system", "content": system}, *messages], **kwargs,
+    )
     with _usage_lock:
-        USAGE["input"] += response.usage.input_tokens
-        USAGE["output"] += response.usage.output_tokens
-    if response.stop_reason in ("refusal", "max_tokens"):
-        raise HarnessError(f"{model} stopped with {response.stop_reason}")
-    return response
+        USAGE["input"] += response.usage.prompt_tokens
+        USAGE["output"] += response.usage.completion_tokens
+    choice = response.choices[0]
+    if choice.message.refusal or choice.finish_reason in ("content_filter", "length"):
+        raise HarnessError(f"{model} stopped with {'refusal' if choice.message.refusal else choice.finish_reason}")
+    return choice.message
 
 
-def text(response):
-    return "".join(b.text for b in response.content if b.type == "text")
+def assistant_turn(message):
+    """Replay only the fields the API accepts back, not everything the SDK object carries."""
+    turn = {"role": "assistant", "content": message.content}
+    if message.tool_calls:
+        turn["tool_calls"] = [
+            {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
+            for c in message.tool_calls
+        ]
+    return turn
+
+
+def text(message):
+    return message.content or ""
 
 
 def schema_errors(name, args):
@@ -102,6 +121,8 @@ class FixtureTools:
 
     def call(self, name, args):
         if name == "get_reorder_items":
+            if "get_reorder_items" not in self.data:  # scenario has no order history loaded
+                return {"error": "no order history available for this user"}, True
             return self.data["get_reorder_items"], False
         if name == "search_catalog":
             return self._search(args["query"]), False
@@ -153,23 +174,30 @@ class Agent:
         self.trace.append({"type": "user", "content": message})
         self.messages.append({"role": "user", "content": message})
         for _ in range(MAX_STEPS):
-            response = ask(self.client, self.model, self.system, self.messages, tools=TOOLS)
-            self.messages.append({"role": "assistant", "content": response.content})
-            if reply := text(response):
-                self.trace.append({"type": "assistant", "content": reply})
-            calls = [b for b in response.content if b.type == "tool_use"]
-            if not calls:
+            reply = ask(self.client, self.model, self.system, self.messages, tools=TOOLS)
+            self.messages.append(assistant_turn(reply))
+            if text(reply):
+                self.trace.append({"type": "assistant", "content": text(reply)})
+            if not reply.tool_calls:
                 return
-            self.messages.append({"role": "user", "content": [self._run(c) for c in calls]})
+            self.messages.extend(self._run(c) for c in reply.tool_calls)
         self.trace.append({"type": "step_limit", "content": f"stopped after {MAX_STEPS} model calls"})
 
     def _run(self, call):
-        args = coerce(call.name, call.input) if self.guard else call.input
-        errors = schema_errors(call.name, args)
-        self.trace.append({"type": "tool_call", "name": call.name, "args": call.input, "schema_errors": errors})
-        result, is_error = ({"error": "; ".join(errors)}, True) if errors else self.tools.call(call.name, args)
-        self.trace.append({"type": "tool_result", "name": call.name, "content": result, "is_error": is_error})
-        return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps(result), "is_error": is_error}
+        name = call.function.name
+        try:
+            raw = json.loads(call.function.arguments or "{}")
+        except json.JSONDecodeError:
+            raw = None
+        if isinstance(raw, dict):
+            args = coerce(name, raw) if self.guard else raw
+            errors = schema_errors(name, args)
+        else:  # the model sent arguments that are not a JSON object
+            raw, args, errors = {"_raw": call.function.arguments}, {}, ["arguments are not a JSON object"]
+        self.trace.append({"type": "tool_call", "name": name, "args": raw, "schema_errors": errors})
+        result, is_error = ({"error": "; ".join(errors)}, True) if errors else self.tools.call(name, args)
+        self.trace.append({"type": "tool_result", "name": name, "content": result, "is_error": is_error})
+        return {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)}
 
     def finish(self):
         self.trace.append({"type": "final_cart", "content": self.tools.summary()})
